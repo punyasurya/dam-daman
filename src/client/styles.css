@@ -861,13 +861,25 @@ input:not([type]),
 }
 .board .piece.moving {
   filter: drop-shadow(0 6px 4px rgba(0, 0, 0, 0.25));
+  transition-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1);
+}
+/* Saat melompat untuk makan, bidak sedikit terangkat. */
+.board .piece.hop-a .stone,
+.board .piece.hop-a .rim {
+  animation: hop-lift-a var(--hop-ms, 0.5s) ease-in-out;
+}
+.board .piece.hop-b .stone,
+.board .piece.hop-b .rim {
+  animation: hop-lift-b var(--hop-ms, 0.5s) ease-in-out;
 }
 .board .piece.vanish {
   opacity: 0;
+  transition: opacity 0.45s ease-in;
 }
 .board .piece.vanish .stone {
   transform: scale(0.3);
-  transition: transform 0.35s ease-in;
+  transition: transform 0.45s ease-in;
+  transition-delay: inherit;
 }
 .board .target {
   fill: var(--gold);
@@ -1349,6 +1361,16 @@ input:not([type]),
 
 /* ---------- Animasi ---------- */
 
+@keyframes hop-lift-a {
+  50% {
+    transform: scale(1.18);
+  }
+}
+@keyframes hop-lift-b {
+  50% {
+    transform: scale(1.18);
+  }
+}
 @keyframes blink {
   0%, 94%, 100% { transform: scaleY(1); }
   96% { transform: scaleY(0.1); }
