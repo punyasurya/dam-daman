@@ -222,12 +222,12 @@ function BoardImpl(props: BoardProps) {
               className={`piece ${piece.color} ${cls} ${sel ? 'selected' : ''} ${isMarked ? 'marked' : ''} ${must ? 'must' : ''} ${damC ? 'dam-candidate' : ''} ${damSel ? 'dam-chosen' : ''}`}
               style={{ ...style, transform: `translate(${x}px, ${y}px)` }}
             >
-              <circle className="halo" r={25} />
-              <ellipse className="shadow" cx={1.5} cy={4} rx={19} ry={17} />
-              <circle className="stone" r={19} fill={`url(#stone-${piece.color})`} />
-              <circle className="rim" r={13} />
-              {piece.raja && <Crown x={0} y={0} s={1.05} />}
-              {damSel && <path className="x-mark" d="M-8 -8L8 8M8 -8L-8 8" />}
+              <circle className="halo" r={20} />
+              <ellipse className="shadow" cx={1.2} cy={3.2} rx={15} ry={13.5} />
+              <circle className="stone" r={15} fill={`url(#stone-${piece.color})`} />
+              <circle className="rim" r={10} />
+              {piece.raja && <Crown x={0} y={0} s={0.82} />}
+              {damSel && <path className="x-mark" d="M-6.5 -6.5L6.5 6.5M6.5 -6.5L-6.5 6.5" />}
             </g>
           );
         })}
@@ -237,7 +237,7 @@ function BoardImpl(props: BoardProps) {
         [...props.targets].map((p) => {
           const [x, y] = pointXY(p, flip);
           const cap = props.captureTargets?.has(p);
-          return <circle key={`t${p}`} className={`target ${cap ? 'capture' : ''}`} cx={x} cy={y} r={cap ? 15 : 11} />;
+          return <circle key={`t${p}`} className={`target ${cap ? 'capture' : ''}`} cx={x} cy={y} r={cap ? 12 : 9} />;
         })}
 
       <g className="hit">
