@@ -1,0 +1,11 @@
+{
+  "name": "Dam-Daman",
+  "short_name": "Dam-Daman",
+  "description": "Permainan papan tradisional Indonesia",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F6EEDC",
+  "theme_color": "#F6EEDC",
+  "lang": "id",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

@@ -1,0 +1,117 @@
+name: CI dan Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: Tes dan build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Cek tipe TypeScript
+        run: npm run typecheck
+      - name: Tes otomatis
+        run: npm test
+      - name: Build web dan server
+        run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: |
+            dist
+            dist-server
+          retention-days: 7
+
+  deploy:
+    name: Deploy ke VPS
+    needs: test
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: https://dam.punyasurya.com
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+      WEB_PATH: ${{ vars.WEB_PATH || '/var/www/dam.punyasurya.com' }}
+      SERVER_PATH: ${{ vars.SERVER_PATH || '/opt/dam-daman' }}
+      SITE_URL: ${{ vars.SITE_URL || 'https://dam.punyasurya.com' }}
+      HAS_KEY: ${{ secrets.SSH_PRIVATE_KEY != '' }}
+    steps:
+      - name: Cek secret
+        id: check
+        run: |
+          if [ -z "$SSH_HOST" ] || [ -z "$SSH_USER" ] || [ "$HAS_KEY" != "true" ]; then
+            echo "::warning::Secret SSH_HOST, SSH_USER, atau SSH_PRIVATE_KEY belum diisi. Deploy dilewati. Lihat docs/DEPLOY.md."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/download-artifact@v4
+        if: steps.check.outputs.ready == 'true'
+        with:
+          name: build
+
+      - name: Siapkan SSH
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          if [ -n "${{ secrets.SSH_KNOWN_HOSTS }}" ]; then
+            printf '%s\n' "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          fi
+          cat > ~/.ssh/config <<CFG
+          Host vps
+            HostName $SSH_HOST
+            User $SSH_USER
+            Port $SSH_PORT
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            ServerAliveInterval 15
+          CFG
+
+      - name: Kirim server
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          rsync -az --delete dist-server/ "vps:$SERVER_PATH/"
+
+      - name: Kirim web
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          rsync -az --delete \
+            --exclude '.well-known' --exclude '.htaccess' --exclude '.user.ini' --exclude 'cgi-bin' \
+            dist/ "vps:$WEB_PATH/"
+
+      - name: Restart server game
+        if: steps.check.outputs.ready == 'true'
+        run: ssh vps 'sudo -n /usr/bin/systemctl restart dam-daman'
+
+      - name: Cek kesehatan
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS "$SITE_URL/api/health"; then echo; echo "Server sehat"; exit 0; fi
+            sleep 3
+          done
+          echo "::error::Server tidak menjawab di $SITE_URL/api/health"
+          exit 1
