@@ -1,11 +1,12 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { EDGES, POINTS } from '../../shared/engine/board';
 import type { Cell, GameState, Piece } from '../../shared/engine/rules';
 import { Crown } from './Icons';
 
-export const BOARD_W = 390;
+export const BOARD_W = 348;
 export const BOARD_H = 484;
-const px = (c: number) => 55 + 70 * c;
+const px = (c: number) => 34 + 70 * c;
 const py = (r: number) => 34 + 52 * r;
 
 export function pointXY(p: number, flip: boolean): [number, number] {
@@ -43,7 +44,25 @@ interface Anim {
   caps: Array<{ piece: Piece; at: number; step: number }>;
 }
 
-const STEP_MS = 240;
+/** Lama satu langkah biasa (ms). */
+const MOVE_MS = 280;
+/** Lompatan makan lebih pelan supaya terlihat bidak lawan dilompati. */
+const CAPTURE_BASE_MS = 380;
+const CAPTURE_PER_PX = 1.2;
+const CAPTURE_MAX_MS = 950;
+/** Jeda singkat di antara lompatan beruntun (ngeracik). */
+const CHAIN_PAUSE_MS = 140;
+/** Lama bidak hilang saat kena DAM. */
+const DAM_REMOVE_MS = 650;
+
+function stepInfo(anim: Anim, step: number): { capture: boolean; ms: number } {
+  const capture = anim.caps.some((c) => c.step === step);
+  if (!capture) return { capture, ms: MOVE_MS };
+  const [x1, y1] = pointXY(anim.points[step - 1], false);
+  const [x2, y2] = pointXY(anim.points[step], false);
+  const dist = Math.hypot(x2 - x1, y2 - y1);
+  return { capture, ms: Math.min(CAPTURE_MAX_MS, Math.round(CAPTURE_BASE_MS + dist * CAPTURE_PER_PX)) };
+}
 
 function BoardImpl(props: BoardProps) {
   const { game, flip = false, onPoint } = props;
@@ -98,22 +117,47 @@ function BoardImpl(props: BoardProps) {
         }
         setAnim({ ...anim, step: next });
       },
-      anim.step === 0 ? 30 : STEP_MS,
+      anim.step === 0
+        ? 30
+        : anim.pieceId === -1
+          ? DAM_REMOVE_MS
+          : (() => {
+              const cur = stepInfo(anim, anim.step);
+              const nextIsCapture = anim.step < total && anim.caps.some((c) => c.step === anim.step + 1);
+              return cur.ms + (cur.capture && nextIsCapture ? CHAIN_PAUSE_MS : 0);
+            })(),
     );
     return () => clearTimeout(t);
   }, [anim]);
 
   // Posisi bidak yang ditampilkan
-  const pieces: Array<{ piece: Piece; at: number; cls: string }> = [];
+  const pieces: Array<{ piece: Piece; at: number; cls: string; style?: CSSProperties }> = [];
   game.board.forEach((cell, at) => {
     if (!cell) return;
     if (anim && cell.id === anim.pieceId) {
       const idx = Math.min(Math.max(anim.step, 0), anim.points.length - 1);
       const showPiece = anim.step < anim.points.length - 1 ? { ...cell, raja: anim.wasRaja } : cell;
-      pieces.push({ piece: showPiece, at: anim.points[idx], cls: 'moving' });
+      const info = anim.step >= 1 && anim.step < anim.points.length ? stepInfo(anim, anim.step) : null;
+      pieces.push({
+        piece: showPiece,
+        at: anim.points[idx],
+        // Nama kelas bergantian supaya animasi angkat diulang di setiap lompatan beruntun.
+        cls: `moving ${info?.capture ? (anim.step % 2 ? 'hop-a' : 'hop-b') : ''}`,
+        style: info ? ({ transitionDuration: `${info.ms}ms`, '--hop-ms': `${info.ms}ms` } as CSSProperties) : undefined,
+      });
     } else pieces.push({ piece: cell, at, cls: '' });
   });
-  if (anim) for (const c of anim.caps) pieces.push({ piece: c.piece, at: c.at, cls: anim.step >= c.step ? 'vanish' : '' });
+  if (anim)
+    for (const c of anim.caps) {
+      // Bidak yang dimakan hilang saat bidak penyerang melintas di atasnya.
+      const delay = anim.pieceId === -1 ? 0 : Math.round(stepInfo(anim, c.step).ms * 0.45);
+      pieces.push({
+        piece: c.piece,
+        at: c.at,
+        cls: anim.step >= c.step ? 'vanish' : '',
+        style: anim.step === c.step ? { transitionDelay: `${delay}ms` } : undefined,
+      });
+    }
   pieces.sort((a, b) => a.piece.id - b.piece.id);
 
   const last = game.last;
@@ -138,6 +182,7 @@ function BoardImpl(props: BoardProps) {
           <stop offset="100%" stopColor="#1C3561" />
         </radialGradient>
       </defs>
+      <rect className="board-bg" x={1} y={1} width={BOARD_W - 2} height={BOARD_H - 2} rx={22} />
       <g className="lines">
         {EDGES.map(([a, b], i) => {
           const [x1, y1] = pointXY(a, flip);
@@ -164,7 +209,7 @@ function BoardImpl(props: BoardProps) {
       )}
 
       <g className="pieces">
-        {pieces.map(({ piece, at, cls }) => {
+        {pieces.map(({ piece, at, cls, style }) => {
           const [x, y] = pointXY(at, flip);
           const sel = props.selected === at && !anim;
           const isMarked = props.marked?.has(at);
@@ -175,7 +220,7 @@ function BoardImpl(props: BoardProps) {
             <g
               key={piece.id}
               className={`piece ${piece.color} ${cls} ${sel ? 'selected' : ''} ${isMarked ? 'marked' : ''} ${must ? 'must' : ''} ${damC ? 'dam-candidate' : ''} ${damSel ? 'dam-chosen' : ''}`}
-              style={{ transform: `translate(${x}px, ${y}px)` }}
+              style={{ ...style, transform: `translate(${x}px, ${y}px)` }}
             >
               <circle className="halo" r={25} />
               <ellipse className="shadow" cx={1.5} cy={4} rx={19} ry={17} />

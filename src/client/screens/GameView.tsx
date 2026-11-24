@@ -505,8 +505,8 @@ export function GameView(props: GameViewProps) {
           <div className="side-actions">
             {props.onEmote && (
               <div className="emote-wrap">
-                <button className="btn ghost small" onClick={() => setEmoteOpen((o) => !o)} aria-expanded={emoteOpen}>
-                  <IconChat width={16} height={16} /> Emote
+                <button className="btn ghost small" aria-label="Emote" onClick={() => setEmoteOpen((o) => !o)} aria-expanded={emoteOpen}>
+                  <IconChat width={16} height={16} /> <span className="btn-label">Emote</span>
                 </button>
                 {emoteOpen && (
                   <div className="emote-menu">
@@ -529,17 +529,18 @@ export function GameView(props: GameViewProps) {
             {props.onOfferDraw && (
               <button
                 className="btn ghost small"
+                aria-label="Tawar seri"
                 disabled={!!result || !props.canOfferDraw}
                 onClick={() => {
                   props.onOfferDraw?.();
                   flash('Tawaran seri dikirim.');
                 }}
               >
-                <IconHandshake width={16} height={16} /> Tawar seri
+                <IconHandshake width={16} height={16} /> <span className="btn-label">Tawar seri</span>
               </button>
             )}
-            <button className="btn ghost small" disabled={!!result} onClick={() => setConfirm('resign')}>
-              <IconFlag width={16} height={16} /> Menyerah
+            <button className="btn ghost small" aria-label="Menyerah" disabled={!!result} onClick={() => setConfirm('resign')}>
+              <IconFlag width={16} height={16} /> <span className="btn-label">Menyerah</span>
             </button>
           </div>
           <div className="rule-chip">
