@@ -611,29 +611,51 @@ input:not([type]),
 /* ---------- Permainan ---------- */
 
 .game-screen {
-  gap: 10px;
+  height: 100dvh;
+  min-height: 0;
+  gap: 8px;
+  padding-left: 10px;
+  padding-right: 10px;
 }
+/* Papan mengisi semua ruang yang tersisa. Di HP: pemain, papan, pemain, lalu status. */
 .game-layout {
+  flex: 1;
+  min-height: 0;
   display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'top top'
+    'board board'
+    'bottom bottom'
+    'banner actions';
   width: 100%;
-  max-width: 520px;
+  max-width: 640px;
   margin: 0 auto;
 }
-.game-col {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
+.game-col,
+.game-side {
+  display: contents;
+}
+.player-bar.top {
+  grid-area: top;
+}
+.player-bar.bottom {
+  grid-area: bottom;
+}
+.player-bar .avatar-ring svg {
+  width: 34px;
+  height: 34px;
 }
 .player-bar {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
   background: var(--card);
   border-radius: 16px;
-  padding: 6px 12px 6px 6px;
+  padding: 4px 12px 4px 4px;
   border: 2px solid var(--line);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
@@ -724,11 +746,22 @@ input:not([type]),
 }
 
 .board-wrap {
+  grid-area: board;
   position: relative;
-  background: var(--wood);
-  border-radius: 22px;
-  padding: 6px;
-  box-shadow: inset 0 0 0 2px #d8c194;
+  min-height: 280px;
+}
+.board-wrap .board {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+}
+.board .board-bg {
+  fill: var(--wood);
+  stroke: #d8c194;
+  stroke-width: 2;
 }
 .board {
   display: block;
@@ -897,21 +930,21 @@ input:not([type]),
   background: var(--red-dark);
 }
 
-.game-side {
+.banner-slot {
+  grid-area: banner;
+  min-height: 52px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-.banner-slot {
-  min-height: 64px;
 }
 .banner {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 8px;
   border-radius: 16px;
-  padding: 8px 8px 8px 12px;
-  min-height: 60px;
+  padding: 6px 8px 6px 12px;
+  min-height: 52px;
   animation: pop-in 0.2s ease-out;
 }
 .banner.plain {
@@ -949,15 +982,21 @@ input:not([type]),
   animation: wiggle 1.2s infinite;
 }
 .side-actions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-.side-actions > :only-child {
-  grid-column: 1 / -1;
+  grid-area: actions;
+  display: flex;
+  gap: 6px;
 }
 .side-actions .btn {
   width: 100%;
+  height: 100%;
+}
+/* Di HP tombol aksi hanya ikon supaya papan dapat ruang lebih. */
+.side-actions .btn-label {
+  display: none;
+}
+.side-actions .btn.small {
+  min-width: 46px;
+  padding: 0 10px;
 }
 .emote-wrap {
   position: relative;
@@ -965,7 +1004,7 @@ input:not([type]),
 .emote-menu {
   position: absolute;
   bottom: calc(100% + 6px);
-  left: 0;
+  right: 0;
   background: var(--card);
   border: 2px solid var(--line);
   border-radius: 14px;
@@ -977,26 +1016,57 @@ input:not([type]),
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
 }
 .rule-chip {
+  grid-area: chip;
+  display: none;
   font-size: 12px;
   color: var(--muted);
   text-align: center;
 }
 
-@media (min-width: 900px) {
+/* Layar lebar (desktop, tablet, HP miring): papan setinggi layar di kiri, panel di kanan. */
+@media (min-width: 900px), (orientation: landscape) and (min-width: 600px) {
   .game-layout {
-    max-width: 1040px;
-    grid-template-columns: minmax(0, 1fr) 320px;
-    align-items: start;
+    /* lebar papan = tinggi yang tersedia x rasio papan, ditambah panel samping */
+    max-width: min(1180px, calc((100dvh - 80px) * 0.72 + 340px));
+    gap: 10px 16px;
+    grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'board top'
+      'board banner'
+      'board actions'
+      'board chip'
+      'board .'
+      'board bottom';
   }
-  .board {
-    max-height: calc(100dvh - 220px);
+  .player-bar .avatar-ring svg {
+    width: 46px;
+    height: 46px;
   }
-  .game-side {
-    position: sticky;
-    top: 16px;
+  .player-bar {
+    padding: 6px 12px 6px 6px;
+  }
+  .banner-slot,
+  .banner {
+    min-height: 64px;
   }
   .side-actions {
-    grid-template-columns: minmax(0, 1fr);
+    flex-direction: column;
+  }
+  .side-actions .btn-label {
+    display: inline;
+  }
+  .side-actions .btn.small {
+    min-height: 40px;
+  }
+  .rule-chip {
+    display: block;
+  }
+  .emote-menu {
+    right: auto;
+    left: 0;
+    bottom: auto;
+    top: calc(100% + 6px);
   }
 }
 
@@ -1225,9 +1295,7 @@ input:not([type]),
   margin: 0 auto;
 }
 .rules-board {
-  background: var(--wood);
   border-radius: 22px;
-  padding: 8px;
 }
 .rules-board .board {
   max-height: 60vh;
@@ -1349,5 +1417,32 @@ input:not([type]),
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* HP miring: layar pendek, panel samping dibuat ringkas. */
+@media (orientation: landscape) and (max-height: 520px) and (min-width: 600px) {
+  .game-screen {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    gap: 4px;
+  }
+  .game-layout {
+    gap: 6px 12px;
+    max-width: min(1180px, calc((100dvh - 60px) * 0.72 + 320px));
+  }
+  .player-bar {
+    padding: 3px 10px 3px 3px;
+  }
+  .player-bar .avatar-ring svg {
+    width: 30px;
+    height: 30px;
+  }
+  .banner-slot,
+  .banner {
+    min-height: 44px;
+  }
+  .rule-chip {
+    display: none;
   }
 }

@@ -3,9 +3,9 @@ import { EDGES, POINTS } from '../../shared/engine/board';
 import type { Cell, GameState, Piece } from '../../shared/engine/rules';
 import { Crown } from './Icons';
 
-export const BOARD_W = 390;
+export const BOARD_W = 348;
 export const BOARD_H = 484;
-const px = (c: number) => 55 + 70 * c;
+const px = (c: number) => 34 + 70 * c;
 const py = (r: number) => 34 + 52 * r;
 
 export function pointXY(p: number, flip: boolean): [number, number] {
@@ -138,6 +138,7 @@ function BoardImpl(props: BoardProps) {
           <stop offset="100%" stopColor="#1C3561" />
         </radialGradient>
       </defs>
+      <rect className="board-bg" x={1} y={1} width={BOARD_W - 2} height={BOARD_H - 2} rx={22} />
       <g className="lines">
         {EDGES.map(([a, b], i) => {
           const [x1, y1] = pointXY(a, flip);
