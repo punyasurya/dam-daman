@@ -7,13 +7,28 @@ import { Modal } from './components/Modal';
 import { RulesForm } from './components/RulesForm';
 import { SettingsModal } from './components/SettingsModal';
 import { online, useOnline } from './net/online';
-import { getPrefs, roomSettingsFromPrefs, setPrefs, usePrefs } from './prefs';
+import { getPrefs, loadToken, roomSettingsFromPrefs, setPrefs, usePrefs } from './prefs';
+import { clearSavedGame, loadSavedGame, SavedGame, saveGame } from './session';
 import { GameView } from './screens/GameView';
 import { Home, LEVEL_INFO } from './screens/Home';
 import { Lobby } from './screens/Lobby';
 import { RulesPage } from './screens/RulesPage';
 
-type Screen = { kind: 'home' } | { kind: 'rules' } | { kind: 'ai'; level: Level } | { kind: 'local' } | { kind: 'online' };
+type Screen =
+  | { kind: 'home' }
+  | { kind: 'rules' }
+  | { kind: 'ai'; level: Level; restore?: SavedGame }
+  | { kind: 'local'; restore?: SavedGame }
+  | { kind: 'online' };
+
+/** Layar pertama: lanjutkan permainan yang tersimpan kalau ada (kecuali membuka link undangan). */
+function initialScreen(): Screen {
+  if (inviteFromPath()) return { kind: 'home' };
+  const saved = loadSavedGame();
+  if (saved?.kind === 'ai') return { kind: 'ai', level: saved.level, restore: saved };
+  if (saved?.kind === 'local') return { kind: 'local', restore: saved };
+  return { kind: 'home' };
+}
 
 function inviteFromPath(): string | null {
   const m = location.pathname.match(/^\/r\/([A-Za-z0-9]{5})\/?$/);
@@ -23,8 +38,13 @@ function inviteFromPath(): string | null {
 const playerName = () => getPrefs().name.trim() || 'Pemain';
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>({ kind: 'home' });
+  const [screen, setScreen] = useState<Screen>(initialScreen);
   const [invite, setInvite] = useState<string | null>(inviteFromPath);
+  // Halaman dimuat ulang saat di room online: masuk lagi otomatis memakai token kursi yang tersimpan.
+  const [resuming, setResuming] = useState(() => {
+    const code = inviteFromPath();
+    return !!code && !!loadToken(code);
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -39,8 +59,25 @@ export default function App() {
     if (location.pathname !== want && !(screen.kind === 'home' && invite)) history.replaceState(null, '', want);
   }, [screen.kind, net.snapshot?.code, invite]);
 
+  useEffect(() => {
+    if (!resuming || !invite) return;
+    online
+      .join(invite, playerName(), getPrefs().avatar)
+      .then(() => {
+        setInvite(null);
+        setScreen({ kind: 'online' });
+      })
+      .catch(() => {
+        /* room sudah tidak ada: tampilkan beranda dengan kode undangan */
+      })
+      .finally(() => setResuming(false));
+    // hanya sekali saat halaman dibuka
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const goHome = useCallback(() => {
     if (screen.kind === 'online') online.leave();
+    if (screen.kind === 'ai' || screen.kind === 'local') clearSavedGame();
     setInvite(null);
     history.replaceState(null, '', '/');
     setScreen({ kind: 'home' });
@@ -76,9 +113,18 @@ export default function App() {
   };
 
   let body: JSX.Element;
-  if (screen.kind === 'rules') body = <RulesPage onBack={() => setScreen({ kind: 'home' })} />;
-  else if (screen.kind === 'ai') body = <AIGame level={screen.level} onExit={goHome} onSettings={() => setSettingsOpen(true)} />;
-  else if (screen.kind === 'local') body = <LocalGame onExit={goHome} onSettings={() => setSettingsOpen(true)} />;
+  if (resuming)
+    body = (
+      <div className="screen center">
+        <div className="card narrow">
+          <p>Menyambung lagi ke room {invite}...</p>
+        </div>
+      </div>
+    );
+  else if (screen.kind === 'rules') body = <RulesPage onBack={() => setScreen({ kind: 'home' })} />;
+  else if (screen.kind === 'ai')
+    body = <AIGame level={screen.level} restore={screen.restore} onExit={goHome} onSettings={() => setSettingsOpen(true)} />;
+  else if (screen.kind === 'local') body = <LocalGame restore={screen.restore} onExit={goHome} onSettings={() => setSettingsOpen(true)} />;
   else if (screen.kind === 'online') {
     const snap = net.snapshot;
     if (!snap) {
@@ -149,14 +195,36 @@ export default function App() {
 
 // ---------------- Lawan komputer ----------------
 
-function AIGame({ level, onExit, onSettings }: { level: Level; onExit: () => void; onSettings: () => void }) {
+/** Skor, giliran pertama, dan penyimpanan otomatis yang sama untuk mode komputer dan berdua. */
+function useSavedMatch(restore: SavedGame | undefined, save: (m: { game: GameState; first: Color; score: Record<Color, number> }) => void) {
+  const [first, setFirst] = useState<Color>(restore?.first ?? 'red');
+  const [game, setGame] = useState<GameState>(() => restore?.game ?? createGame(getPrefs().rules, 'red'));
+  const [score, setScore] = useState<Record<Color, number>>(restore?.score ?? { red: 0, blue: 0 });
+  // Hasil yang sudah dihitung ke skor (hasil dari permainan yang dipulihkan tidak dihitung lagi).
+  const counted = useRef(game.result);
+  useEffect(() => {
+    const r = game.result;
+    if (!r?.winner || r === counted.current) return;
+    counted.current = r;
+    setScore((s) => ({ ...s, [r.winner!]: s[r.winner!] + 1 }));
+  }, [game.result]);
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  useEffect(() => saveRef.current({ game, first, score }), [game, first, score]);
+  const rematch = () => {
+    const f = other(first);
+    setFirst(f);
+    setGame(createGame(getPrefs().rules, f));
+  };
+  return { game, setGame, score, rematch };
+}
+
+function AIGame({ level, restore, onExit, onSettings }: { level: Level; restore?: SavedGame; onExit: () => void; onSettings: () => void }) {
   const prefs = usePrefs();
   const human: Color = 'red';
   const ai = other(human);
-  const [first, setFirst] = useState<Color>('red');
-  const [game, setGame] = useState<GameState>(() => createGame(getPrefs().rules, 'red'));
+  const { game, setGame, score, rematch } = useSavedMatch(restore, (m) => saveGame({ kind: 'ai', level, ...m }));
   const [thinking, setThinking] = useState(false);
-  const [score, setScore] = useState<Record<Color, number>>({ red: 0, blue: 0 });
   const gen = useRef(0);
 
   useEffect(() => {
@@ -173,11 +241,7 @@ function AIGame({ level, onExit, onSettings }: { level: Level; onExit: () => voi
       gen.current++;
       setThinking(false);
     };
-  }, [game, ai, level]);
-
-  useEffect(() => {
-    if (game.result?.winner) setScore((s) => ({ ...s, [game.result!.winner!]: s[game.result!.winner!] + 1 }));
-  }, [game.result]);
+  }, [game, ai, level, setGame]);
 
   const info = LEVEL_INFO[level];
   return (
@@ -194,11 +258,7 @@ function AIGame({ level, onExit, onSettings }: { level: Level; onExit: () => voi
       onAction={(a: Action) => setGame((g) => applyAction(g, a))}
       onExit={onExit}
       onResign={() => setGame((g) => endGame(g, { winner: ai, reason: 'menyerah' }))}
-      onRematch={() => {
-        const f = other(first);
-        setFirst(f);
-        setGame(createGame(getPrefs().rules, f));
-      }}
+      onRematch={rematch}
       onOpenSettings={onSettings}
     />
   );
@@ -206,14 +266,9 @@ function AIGame({ level, onExit, onSettings }: { level: Level; onExit: () => voi
 
 // ---------------- Berdua di satu layar ----------------
 
-function LocalGame({ onExit, onSettings }: { onExit: () => void; onSettings: () => void }) {
+function LocalGame({ restore, onExit, onSettings }: { restore?: SavedGame; onExit: () => void; onSettings: () => void }) {
   const prefs = usePrefs();
-  const [first, setFirst] = useState<Color>('red');
-  const [game, setGame] = useState<GameState>(() => createGame(getPrefs().rules, 'red'));
-  const [score, setScore] = useState<Record<Color, number>>({ red: 0, blue: 0 });
-  useEffect(() => {
-    if (game.result?.winner) setScore((s) => ({ ...s, [game.result!.winner!]: s[game.result!.winner!] + 1 }));
-  }, [game.result]);
+  const { game, setGame, score, rematch } = useSavedMatch(restore, (m) => saveGame({ kind: 'local', ...m }));
   const blueAvatar = prefs.avatar === 'komodo' ? 'jalak' : 'komodo';
   return (
     <GameView
@@ -228,11 +283,7 @@ function LocalGame({ onExit, onSettings }: { onExit: () => void; onSettings: () 
       onAction={(a: Action) => setGame((g) => applyAction(g, a))}
       onExit={onExit}
       onResign={() => setGame((g) => endGame(g, { winner: other(g.turn), reason: 'menyerah' }))}
-      onRematch={() => {
-        const f = other(first);
-        setFirst(f);
-        setGame(createGame(getPrefs().rules, f));
-      }}
+      onRematch={rematch}
       onOpenSettings={onSettings}
     />
   );
