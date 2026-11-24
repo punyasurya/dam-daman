@@ -13,8 +13,9 @@ import { AvatarKind, EMOTES } from '../../shared/protocol';
 import { audio } from '../audio/audio';
 import { Avatar, AvatarMood } from '../components/Avatar';
 import { Board } from '../components/Board';
-import { IconBack, IconChat, IconFlag, IconHandshake, IconSettings } from '../components/Icons';
-import { Confirm } from '../components/Modal';
+import { IconBack, IconBook, IconChat, IconFlag, IconHandshake, IconSettings } from '../components/Icons';
+import { Confirm, Modal } from '../components/Modal';
+import { RulesSummary } from '../components/RulesSummary';
 import { SoundToggles } from '../components/SoundToggles';
 import type { EmoteEvent } from '../net/online';
 
@@ -78,6 +79,7 @@ export function GameView(props: GameViewProps) {
   const [moods, setMoods] = useState<Record<Color, AvatarMood>>({ red: 'idle', blue: 'idle' });
   const [animating, setAnimating] = useState(false);
   const [confirm, setConfirm] = useState<null | 'resign' | 'exit'>(null);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [emoteOpen, setEmoteOpen] = useState(false);
   const [bubbles, setBubbles] = useState<Record<Color, string | null>>({ red: null, blue: null });
   const [showResult, setShowResult] = useState(false);
@@ -542,10 +544,12 @@ export function GameView(props: GameViewProps) {
             <button className="btn ghost small" aria-label="Menyerah" disabled={!!result} onClick={() => setConfirm('resign')}>
               <IconFlag width={16} height={16} /> <span className="btn-label">Menyerah</span>
             </button>
+            <button className="btn ghost small rules-btn" aria-label="Aturan" onClick={() => setRulesOpen(true)}>
+              <IconBook width={16} height={16} /> <span className="btn-label">Aturan</span>
+            </button>
           </div>
-          <div className="rule-chip">
-            {game.settings.mode === 'tradisional' ? `Tradisional · DAM ${game.settings.damPenalty} bidak` : 'Wajib makan'} ·{' '}
-            {game.settings.raja === 'terbang' ? 'raja terbang' : game.settings.raja === 'ganjil' ? 'raja langkah ganjil' : 'tanpa raja'}
+          <div className="side-rules">
+            <RulesSummary settings={game.settings} online={props.turnDeadline !== undefined} />
           </div>
         </aside>
       </div>
@@ -610,6 +614,16 @@ export function GameView(props: GameViewProps) {
         </button>
       )}
 
+      {rulesOpen && (
+        <Modal title="Aturan" onClose={() => setRulesOpen(false)}>
+          <RulesSummary settings={game.settings} online={props.turnDeadline !== undefined} heading={false} />
+          <div className="row end">
+            <button className="btn blue" onClick={() => setRulesOpen(false)}>
+              Tutup
+            </button>
+          </div>
+        </Modal>
+      )}
       {confirm === 'resign' && (
         <Confirm
           title="Menyerah?"
