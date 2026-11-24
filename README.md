@@ -34,7 +34,7 @@ Butuh Node.js 20 atau lebih baru.
 
 ```bash
 npm install
-npm run dev        # web di http://localhost:5173, server room di port 3001
+npm run dev        # web di http://localhost:5173, server room di port 3747
 npm test           # tes otomatis
 npm run typecheck
 npm run build      # hasil: dist/ (web) dan dist-server/server.mjs (server)

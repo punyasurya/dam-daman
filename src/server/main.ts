@@ -131,13 +131,21 @@ export function startServer(port: number, host = '127.0.0.1') {
     socket.on('disconnect', () => leaveCurrent(socket));
   });
 
+  http.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${port} di ${host} sudah dipakai aplikasi lain. Ganti PORT di service dan proxy Apache.`);
+    } else {
+      console.error('Server gagal berjalan:', err);
+    }
+    process.exit(1);
+  });
   http.listen(port, host);
   return { http, io, manager, close: () => new Promise<void>((r) => io.close(() => r())) };
 }
 
 const isMain = process.argv[1] && /main\.(ts|mjs|js)$|server\.mjs$/.test(process.argv[1]);
 if (isMain) {
-  const port = Number(process.env.PORT ?? 3001);
+  const port = Number(process.env.PORT ?? 3747);
   const host = process.env.HOST ?? '127.0.0.1';
   startServer(port, host);
   console.log(`Server Dam-Daman berjalan di http://${host}:${port}`);
