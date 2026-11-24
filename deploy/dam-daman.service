@@ -7,7 +7,7 @@ Type=simple
 User=__DEPLOY_USER__
 WorkingDirectory=__SERVER_PATH__
 Environment=NODE_ENV=production
-Environment=PORT=3001
+Environment=PORT=3747
 Environment=HOST=127.0.0.1
 ExecStart=__NODE_BIN__ __SERVER_PATH__/server.mjs
 Restart=always

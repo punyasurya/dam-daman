@@ -3,7 +3,7 @@
 Setiap push ke `main`, GitHub Actions menjalankan tes dan build, lalu mengirim hasilnya ke VPS lewat SSH:
 
 - Tampilan web (`dist/`) ke `/var/www/dam.punyasurya.com` (folder virtualhost dari SinarPanel).
-- Server room online (`dist-server/server.mjs`, satu file tanpa `node_modules`) ke `/opt/dam-daman`, dijalankan oleh systemd sebagai service `dam-daman` di `127.0.0.1:3001`.
+- Server room online (`dist-server/server.mjs`, satu file tanpa `node_modules`) ke `/opt/dam-daman`, dijalankan oleh systemd sebagai service `dam-daman` di `127.0.0.1:3747`.
 - Apache meneruskan `/socket.io/` (WebSocket) dan `/api/` ke server itu.
 
 Kalau secret belum diisi, langkah deploy dilewati dengan peringatan dan CI tetap hijau.
@@ -63,10 +63,11 @@ Push ke `main`, atau buka tab **Actions › CI dan Deploy › Run workflow**. La
 ```bash
 systemctl status dam-daman          # status server game
 journalctl -u dam-daman -f          # log server game
-curl http://127.0.0.1:3001/api/health
+curl http://127.0.0.1:3747/api/health
 ```
 
 ## Catatan
 
 - Room online disimpan di memori server. Setiap deploy me-restart server, jadi permainan online yang sedang berjalan saat deploy akan terputus. Pemain cukup membuat room baru.
-- Server hanya mendengarkan `127.0.0.1`, jadi port 3001 tidak terbuka ke internet.
+- Server hanya mendengarkan `127.0.0.1`, jadi port 3747 tidak terbuka ke internet.
+- Kalau port 3747 sudah dipakai aplikasi lain (cek dengan `sudo ss -ltnp | grep 3747`), pilih port lain lalu ganti di `/etc/systemd/system/dam-daman.service` (baris `Environment=PORT=`) dan di `/etc/apache2/dam-daman.conf`, kemudian `sudo systemctl daemon-reload && sudo systemctl restart dam-daman && sudo systemctl reload apache2`.
